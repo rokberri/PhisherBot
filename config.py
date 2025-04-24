@@ -1,0 +1,2 @@
+TOKEN = '7236157217:AAENbu-PNp0-C3FnjVkGCCtEAjkqtIclVEE'
+FISHING_DATASET = '../DATASETS/Phishing_Email.csv'
