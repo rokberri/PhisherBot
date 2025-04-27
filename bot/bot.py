@@ -5,10 +5,16 @@ from config import TOKEN
 import pickle
 from utils import load_model
 from text_processor import TextPreprocessor
+from model_manager import ModelManager
+
 # Загрузка моделей
 lr_model = load_model('models/lr_C_1.pkl')
 dt_model = load_model('models/dt.pkl')
-lstm_model = load_model('models/lstm.pkl')
+
+# Загрузка модели LSTM
+with open('models/lstm_best.pkl', 'rb') as f:
+    lstm_data = pickle.load(f)
+    lstm_model = lstm_data['model']  # Извлекаем модель Keras
 
 secure_users = []
 
