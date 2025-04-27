@@ -8,7 +8,7 @@ from utils import decode_prediction, preprocess_text, load_model, vectorize_text
 
 # Загрузка моделей
 lr_model = load_model('models/lr.pkl')
-dt_model = load_model('models/dt_class_weight_None_criterion_entropy_max_depth_None_min_samples_leaf_2_min_samples_split_10.pkl')
+# dt_model = load_model('models/dt_class_weight_None_criterion_entropy_max_depth_None_min_samples_leaf_2_min_samples_split_10.pkl')
 
 secure_users = []
 
@@ -33,21 +33,39 @@ async def set_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user.print_info()
     return None
 
+from config import SUSPICIOUS_PATTERNS
+
 async def check_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    text = update.message.text
-        
-    # Векторизация
+    text = update.message.text.lower()
     X = vectorize_text(text)
-
-    # Предсказания
-    # lr_pred = lr_model.predict(X)[0]
-    dt_pred = dt_model.predict(X)[0]
-
-    await update.message.reply_text(
-        # f"LR: {'Phishing' if lr_pred == 1 else 'Ham'}\n"
-        f"DT: {'Phishing' if dt_pred == 1 else 'Ham'}"
+    
+    # Получаем вероятность вместо класса
+    lr_prob = lr_model.predict_proba(X)[0][1]  # Вероятность класса 1 (фишинг)
+    lr_pred = 1 if lr_prob > 0.5 else 0  # Класс на основе порога 0.5
+    
+    # Поиск подозрительных фраз
+    detected_patterns = {}
+    for pattern, reason in SUSPICIOUS_PATTERNS.items():
+        if pattern in text:
+            detected_patterns[pattern] = reason
+    
+    # Оценка риска
+    risk_score = int(lr_prob * 100)  # Используем вероятность, а не предсказанный класс
+    risk_status = "🔴 Высокий риск" if risk_score > 70 else \
+                 "🟡 Средний риск" if risk_score > 30 else "🟢 Низкий риск"
+    
+    # Формирование ответа
+    response = (
+        f"🛡️ Риск фишинга: {risk_score}% ({risk_status})\n"
+        f"Модель: {'⚠️ Phishing' if lr_pred == 1 else '✅ Ham'}\n"
     )
+    
+    if detected_patterns:
+        response += "\n🔍 Обнаружены подозрительные фразы:\n"
+        for pattern, reason in detected_patterns.items():
+            response += f"- '{pattern}': {reason}\n"
+    
+    await update.message.reply_text(response)
   
 app = ApplicationBuilder().token(TOKEN).build()
 

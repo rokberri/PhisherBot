@@ -16,12 +16,6 @@ def load_model(path):
             return pickle.load(f)
     except (pickle.UnpicklingError, EOFError) as e:
         raise ValueError(f"Failed to load model from {path}: {str(e)}")
-# Загрузка предобученных компонентов
-
-with open('encoders/tfidf_vectorizer_LR.pkl', 'rb') as f:
-    vectorizer_LR = pickle.load(f)
-with open('encoders/encoder_LR.pkl', 'rb') as f:
-    encoder_LR = pickle.load(f)
 
 def clean_text(text):
     """Базовая очистка текста (одинаковая для всех моделей)."""
@@ -39,13 +33,16 @@ def preprocess_text(text):
 
 def decode_prediction(pred):
     """Декодирует числовое предсказание в текстовую метку"""
+    # Загрузка предобученных компонентов
+    with open('encoders/encoder_LR.pkl', 'rb') as f:
+        encoder_LR = pickle.load(f)
     # Преобразуем предсказание в 2D-массив
     pred_2d = np.array([pred]).reshape(1, -1)  # или np.array([pred]).reshape(1, -1)
     return encoder_LR.inverse_transform(pred_2d)[0][0]
 
 def vectorize_text(text):
     """Векторизация с сохраненным векторайзером"""
-    with open('encoders/tfidf_vectorizer_DT.pkl', 'rb') as f:
+    with open('encoders/tfidf_vectorizer_LR.pkl', 'rb') as f:
         tfidf_vectorizer = pickle.load(f)
     cleaned = preprocess_text(text)
     return tfidf_vectorizer.transform([cleaned])
