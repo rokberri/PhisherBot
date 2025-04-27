@@ -1,7 +1,9 @@
-import re
-import pickle
+# utils.py
 import os
+import pickle
 import numpy as np
+from pathlib import Path
+from text_processor import TextPreprocessor
 
 def load_model(path):
     """Безопасная загрузка pickle-модели"""
@@ -17,32 +19,33 @@ def load_model(path):
     except (pickle.UnpicklingError, EOFError) as e:
         raise ValueError(f"Failed to load model from {path}: {str(e)}")
 
-def clean_text(text):
-    """Базовая очистка текста (одинаковая для всех моделей)."""
-    text = text.lower()
-    text = re.sub(r'[^a-z\s]', '', text)  # Удаляем всё, кроме букв и пробелов
-    text = re.sub(r'\s+', ' ', text).strip()  # Удаляем лишние пробелы
-    return text
-
-
 def preprocess_text(text):
-    """Универсальная очистка текста"""
-    text = text.lower()
-    text = re.sub(r'[^\w\s]', '', text)
-    return text
+    """
+    Полная предобработка текста с использованием сохраненных артефактов
+    """
+    # Загрузка векторайзера
+    vectorizer_path = "encoders/tfidf_vectorizer.pkl"
+    if not os.path.exists(vectorizer_path):
+        raise FileNotFoundError(f"Vectorizer not found at {vectorizer_path}")
+    
+    with open(vectorizer_path, 'rb') as f:
+        vectorizer = pickle.load(f)
+    
+    # Очистка текста
+    preprocessor = TextPreprocessor()
+    cleaned_text = preprocessor.clean_text(text)
+    
+    # Векторизация
+    return vectorizer.transform([cleaned_text])
 
 def decode_prediction(pred):
     """Декодирует числовое предсказание в текстовую метку"""
-    # Загрузка предобученных компонентов
-    with open('encoders/encoder_LR.pkl', 'rb') as f:
-        encoder_LR = pickle.load(f)
-    # Преобразуем предсказание в 2D-массив
-    pred_2d = np.array([pred]).reshape(1, -1)  # или np.array([pred]).reshape(1, -1)
-    return encoder_LR.inverse_transform(pred_2d)[0][0]
-
-def vectorize_text(text):
-    """Векторизация с сохраненным векторайзером"""
-    with open('encoders/tfidf_vectorizer_LR.pkl', 'rb') as f:
-        tfidf_vectorizer = pickle.load(f)
-    cleaned = preprocess_text(text)
-    return tfidf_vectorizer.transform([cleaned])
+    encoder_path = "encoders/label_encoder.pkl"
+    if not os.path.exists(encoder_path):
+        raise FileNotFoundError(f"Encoder not found at {encoder_path}")
+    
+    with open(encoder_path, 'rb') as f:
+        encoder = pickle.load(f)
+    
+    pred_2d = np.array([pred]).reshape(1, -1)
+    return encoder.inverse_transform(pred_2d)[0]

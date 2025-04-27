@@ -3,12 +3,12 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, filte
 from User import User 
 from config import TOKEN
 import pickle
-from utils import decode_prediction, preprocess_text, load_model, vectorize_text
-
-
+from utils import load_model
+from text_processor import TextPreprocessor
 # Загрузка моделей
-lr_model = load_model('models/lr.pkl')
-# dt_model = load_model('models/dt_class_weight_None_criterion_entropy_max_depth_None_min_samples_leaf_2_min_samples_split_10.pkl')
+lr_model = load_model('models/lr_C_1.pkl')
+dt_model = load_model('models/dt.pkl')
+lstm_model = load_model('models/lstm.pkl')
 
 secure_users = []
 
@@ -36,36 +36,60 @@ async def set_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 from config import SUSPICIOUS_PATTERNS
 
 async def check_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.lower()
-    X = vectorize_text(text)
+    # Загрузка артефактов
+    with open('encoders/tfidf_vectorizer.pkl', 'rb') as f:
+        vectorizer = pickle.load(f)
+    with open('encoders/label_encoder.pkl', 'rb') as f:
+        label_encoder = pickle.load(f)
     
-    # Получаем вероятность вместо класса
+    # Инициализация препроцессора
+    preprocessor = TextPreprocessor()
+    
+    # Очистка и предобработка текста
+    raw_text = update.message.text
+    cleaned_text = preprocessor.clean_text(raw_text)
+    
+    # Векторизация текста
+    X = vectorizer.transform([cleaned_text])
+    
+    # Получаем вероятность вместо класса для LR
     lr_prob = lr_model.predict_proba(X)[0][1]  # Вероятность класса 1 (фишинг)
-    lr_pred = 1 if lr_prob > 0.5 else 0  # Класс на основе порога 0.5
+
+    # Получаем вероятность вместо класса для DT
+    dt_prob = dt_model.predict_proba(X)[0][1]  # Вероятность класса 1 (фишинг)
+    
+    # Получаем вероятность вместо класса для DT
+    lstm_prob = lstm_model.predict(X)[0][0]  # Вероятность класса 1 (фишинг)
+
+    # Комбинированная оценка (можно настроить веса)
+    combined_prob = (lr_prob * 0.45 + dt_prob * 0.15 + lstm_prob * 0.4)
+    # combined_pred = 1 if combined_prob > 0.5 else 0
+    risk_score = int(combined_prob * 100)
+    risk_status = "🔴 Высокий риск" if risk_score > 70 else \
+             "🟡 Средний риск" if risk_score > 30 else "🟢 Низкий риск"
     
     # Поиск подозрительных фраз
     detected_patterns = {}
     for pattern, reason in SUSPICIOUS_PATTERNS.items():
-        if pattern in text:
+        if pattern in raw_text.lower():  # Поиск в исходном тексте (без очистки)
             detected_patterns[pattern] = reason
     
-    # Оценка риска
-    risk_score = int(lr_prob * 100)  # Используем вероятность, а не предсказанный класс
-    risk_status = "🔴 Высокий риск" if risk_score > 70 else \
-                 "🟡 Средний риск" if risk_score > 30 else "🟢 Низкий риск"
-    
-    # Формирование ответа
+    # Формирование ответа с информацией от обеих моделей
     response = (
-        f"🛡️ Риск фишинга: {risk_score}% ({risk_status})\n"
-        f"Модель: {'⚠️ Phishing' if lr_pred == 1 else '✅ Ham'}\n"
+        f"🛡️ Комбинированный риск фишинга: {risk_score}% ({risk_status})\n"
+        f"LR модель: {'⚠️ Phishing' if lr_model.predict(X)[0] == 1 else '✅ Ham'} ({int(lr_prob*100)}%)\n"
+        f"DT модель: {'⚠️ Phishing' if dt_model.predict(X)[0] == 1 else '✅ Ham'} ({int(dt_prob*100)}%)\n"
+        f"LSTM модель: {'⚠️ Phishing' if lstm_model.predict(X)[0] == 1 else '✅ Ham'} ({int(lstm_prob*100)}%)\n"
     )
     
+    # Добавляем обнаруженные паттерны
     if detected_patterns:
         response += "\n🔍 Обнаружены подозрительные фразы:\n"
         for pattern, reason in detected_patterns.items():
-            response += f"- '{pattern}': {reason}\n"
+            response += f"- {pattern}: {reason}\n"
     
     await update.message.reply_text(response)
+
   
 app = ApplicationBuilder().token(TOKEN).build()
 
