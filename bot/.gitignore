@@ -1,8 +1,0 @@
-config.py
-test.py
-# Игнорировать ВСЁ в текущей директории
-/*
-# Но не игнорировать файл `file.txt`
-!/bot/
-!/NetworkTrain/
-!/SupportModels/
