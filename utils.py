@@ -1,84 +1,51 @@
-from bs4 import BeautifulSoup
 import re
-import string
-import nltk
-import emoji
-import pandas as pd
-from nltk.corpus import stopwords
+import pickle
+import os
+import numpy as np
 
-
-
-#-----------------TEXT CLEAN UP-----------------#
-
-# Function to remove HTML tags from text
-def remove_html_tags(text):
-     # Проверка, что текст не похож на путь к файлу или URL
-    if re.match(r'^(\/|http|www)', text.strip()):
-        return text  # Возвращаем исходный текст без обработки
+def load_model(path):
+    """Безопасная загрузка pickle-модели"""
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Model file {path} not found!")
+    
+    if os.path.getsize(path) == 0:
+        raise ValueError(f"Model file {path} is empty!")
+    
     try:
-        soup = BeautifulSoup(text, 'html.parser')
-        return soup.get_text()
-    except Exception:
-        return text
+        with open(path, 'rb') as f:
+            return pickle.load(f)
+    except (pickle.UnpicklingError, EOFError) as e:
+        raise ValueError(f"Failed to load model from {path}: {str(e)}")
+# Загрузка предобученных компонентов
 
-# Define a function to remove URLs using regular expressions
-def remove_urls(text):
-    return re.sub(r'http\S+|www\S+', '', text)
+with open('encoders/tfidf_vectorizer_LR.pkl', 'rb') as f:
+    vectorizer_LR = pickle.load(f)
+with open('encoders/encoder_LR.pkl', 'rb') as f:
+    encoder_LR = pickle.load(f)
 
-# Define the punctuation characters to remove
-punctuation = string.punctuation
-
-# Function to remove punctuation from text
-def remove_punctuation(text):
-    return text.translate(str.maketrans('', '', punctuation))
-
-
-def remove_special_characters(text):
-    # Define the pattern to match special characters
-    pattern = r'[^a-zA-Z0-9\s]'  # Matches any character that is not alphanumeric or whitespace
-    
-    # Replace special characters with an empty string
-    clean_text = re.sub(pattern, '', text)
-    
-    return clean_text
+def clean_text(text):
+    """Базовая очистка текста (одинаковая для всех моделей)."""
+    text = text.lower()
+    text = re.sub(r'[^a-z\s]', '', text)  # Удаляем всё, кроме букв и пробелов
+    text = re.sub(r'\s+', ' ', text).strip()  # Удаляем лишние пробелы
+    return text
 
 
-# Function to remove numeric values from text
-def remove_numeric(text):
-    return re.sub(r'\d+', '', text)
+def preprocess_text(text):
+    """Универсальная очистка текста"""
+    text = text.lower()
+    text = re.sub(r'[^\w\s]', '', text)
+    return text
 
-# Define a function to remove non-alphanumeric characters
-def remove_non_alphanumeric(text):
-    return re.sub(r'[^a-zA-Z0-9\s]', '', text)
+def decode_prediction(pred):
+    """Декодирует числовое предсказание в текстовую метку"""
+    # Преобразуем предсказание в 2D-массив
+    pred_2d = np.array([pred]).reshape(1, -1)  # или np.array([pred]).reshape(1, -1)
+    return encoder_LR.inverse_transform(pred_2d)[0][0]
 
-
-
-nltk.download('stopwords')
-stop_words = set(stopwords.words('english'))
-
-# Function to remove stop words from text
-def remove_stopwords(text):
-    words = text.split()
-    filtered_words = [word for word in words if word.lower() not in stop_words]
-    return ' '.join(filtered_words)
-
-# Function to remove emojis from text
-def remove_emojis(text):
-    return emoji.demojize(text)
-
-
-
-def clean_up(message:string):
-    clean_message = message.lower()
-    clean_message = clean_message.strip()
-    clean_message = remove_html_tags(clean_message)
-    clean_message = remove_urls(clean_message)
-    clean_message = remove_punctuation(clean_message)
-    clean_message = remove_special_characters(clean_message)
-    clean_message = remove_numeric(clean_message)
-    clean_message = remove_non_alphanumeric(clean_message)
-    clean_message = remove_stopwords(clean_message)
-    clean_message = remove_emojis(clean_message)
-    clean_message = remove_stopwords(clean_message)
-    return clean_message
-
+def vectorize_text(text):
+    """Векторизация с сохраненным векторайзером"""
+    with open('encoders/tfidf_vectorizer_DT.pkl', 'rb') as f:
+        tfidf_vectorizer = pickle.load(f)
+    cleaned = preprocess_text(text)
+    return tfidf_vectorizer.transform([cleaned])

@@ -3,8 +3,12 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, filte
 from User import User 
 from config import TOKEN
 import pickle
-# from utils import clean_up
+from utils import decode_prediction, preprocess_text, load_model, vectorize_text
 
+
+# Загрузка моделей
+lr_model = load_model('models/lr.pkl')
+dt_model = load_model('models/dt_class_weight_None_criterion_entropy_max_depth_None_min_samples_leaf_2_min_samples_split_10.pkl')
 
 secure_users = []
 
@@ -29,25 +33,28 @@ async def set_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user.print_info()
     return None
 
-# async def check_email(update: Update, context: CallbackContext) -> None:
-#     chat_id = update.message.chat_id
-#     message = update.message.text
+async def check_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-     
-#     with open('lr_model.pkl', 'rb') as file:
-#         lr_model = pickle.load(file)
-#     with open('cv.pkl', 'rb') as f:
-#         cv = pickle.load(f)
-#     predictions = lr_model.predict(cv.transform([clean_up(message)]))
+    text = update.message.text
+        
+    # Векторизация
+    X = vectorize_text(text)
 
-    await update.message.reply_text(f'Result: {predictions[0]}')
+    # Предсказания
+    # lr_pred = lr_model.predict(X)[0]
+    dt_pred = dt_model.predict(X)[0]
 
+    await update.message.reply_text(
+        # f"LR: {'Phishing' if lr_pred == 1 else 'Ham'}\n"
+        f"DT: {'Phishing' if dt_pred == 1 else 'Ham'}"
+    )
+  
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", hello))
 app.add_handler(CommandHandler("get_info", role))
 app.add_handler(CommandHandler("set_role", set_role))
-# app.add_handler(MessageHandler(None, check_email))
+app.add_handler(MessageHandler(None, check_email))
 
 
 app.run_polling()
