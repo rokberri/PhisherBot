@@ -2,22 +2,22 @@ models:
   core:
     - name: "lr_model"
       type: "sklearn"
-      path: "models/core/lr"
+      path: "models/lr"
       weight: 0.45
       enabled: true
     - name: "lstm_model"
       type: "keras"
-      path: "models/core/lstm"
+      path: "models/lstm"
       weight: 0.4
       enabled: true
     - name: "dt_model"
       type: "sklearn"
-      path: "models/core/dt"
+      path: "models/dt"
       weight: 0.15
       enabled: true 
-  # plugins:
-  #   - name: "external_model"
-  #     type: "onnx"
-  #     path: "models/plugins/external_model"
-  #     weight: 0.5
-  #     enabled: true
+  plugins:
+    - name: "external_model"
+      type: "onnx"
+      path: "models/plugins/external_model"
+      weight: 0.5
+      enabled: true
