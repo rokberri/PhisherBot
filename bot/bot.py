@@ -1,25 +1,17 @@
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, filters, CallbackContext, MessageHandler
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import CallbackQueryHandler, ApplicationBuilder, CommandHandler, ContextTypes, filters, CallbackContext, MessageHandler
 from User import User 
 from config import TOKEN, SUSPICIOUS_PATTERNS
-import pickle
-from utils import load_model
-from text_processor import TextPreprocessor
+from datetime import datetime
+from utils import *
 from model_manager import ModelManager
 
+# Создаем соединение с базой данных
+conn = create_connection()
 
+# Менеджер моделей
 model_manager = ModelManager()
-
-# # Загрузка моделей
-# lr_model = load_model('models/lr_C_1.pkl')
-# dt_model = load_model('models/dt.pkl')
-
-# # Загрузка модели LSTM
-# with open('models/lstm_best.pkl', 'rb') as f:
-#     lstm_data = pickle.load(f)
-#     lstm_model = lstm_data['model']  # Извлекаем модель Keras
-
-secure_users = []
 
 USER_CLASSES = {
     0 : 'ORD',
@@ -27,119 +19,113 @@ USER_CLASSES = {
 }
 
 async def hello(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(f'Hello {update.effective_user.first_name}')
+    await update.message.reply_text(f'Привет, {update.effective_user.first_name}. Этот бот помогает проверять безопасность ваших электронных писем.')
 
 async def role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = User(update.effective_user.id, update.effective_user.first_name, USER_CLASSES[0])
     user.print_info()
-    await update.message.reply_text(f'Your role is: {user.user_role}')
+    await update.message.reply_text(f'Ваш текущий статус: {user.user_role}')
 
-
-async def set_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = User(update.effective_user.id, update.effective_user.first_name, USER_CLASSES[1])
-    user.user_type = USER_CLASSES[1]
-    secure_users.append(user)
-    user.print_info()
-    return None
-
-from config import SUSPICIOUS_PATTERNS
-
-# async def check_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     # Загрузка артефактов
-#     with open('encoders/tfidf_vectorizer.pkl', 'rb') as f:
-#         vectorizer = pickle.load(f)
-#     with open('encoders/label_encoder.pkl', 'rb') as f:
-#         label_encoder = pickle.load(f)
-    
-#     # Инициализация препроцессора
-#     preprocessor = TextPreprocessor()
-    
-#     # Очистка и предобработка текста
-#     raw_text = update.message.text
-#     cleaned_text = preprocessor.clean_text(raw_text)
-    
-#     # Векторизация текста
-#     X = vectorizer.transform([cleaned_text])
-    
-#     # Получаем вероятность вместо класса для LR
-#     lr_prob = lr_model.predict_proba(X)[0][1]  # Вероятность класса 1 (фишинг)
-
-#     # Получаем вероятность вместо класса для DT
-#     dt_prob = dt_model.predict_proba(X)[0][1]  # Вероятность класса 1 (фишинг)
-    
-#     # Получаем вероятность вместо класса для DT
-#     lstm_prob = lstm_model.predict(X)[0][0]  # Вероятность класса 1 (фишинг)
-
-#     # Комбинированная оценка (можно настроить веса)
-#     combined_prob = (lr_prob * 0.45 + dt_prob * 0.15 + lstm_prob * 0.4)
-#     # combined_pred = 1 if combined_prob > 0.5 else 0
-#     risk_score = int(combined_prob * 100)
-#     risk_status = "🔴 Высокий риск" if risk_score > 70 else \
-#              "🟡 Средний риск" if risk_score > 30 else "🟢 Низкий риск"
-    
-#     # Поиск подозрительных фраз
-#     detected_patterns = {}
-#     for pattern, reason in SUSPICIOUS_PATTERNS.items():
-#         if pattern in raw_text.lower():  # Поиск в исходном тексте (без очистки)
-#             detected_patterns[pattern] = reason
-    
-#     # Формирование ответа с информацией от обеих моделей
-#     response = (
-#         f"🛡️ Комбинированный риск фишинга: {risk_score}% ({risk_status})\n"
-#         f"LR модель: {'⚠️ Phishing' if lr_model.predict(X)[0] == 1 else '✅ Ham'} ({int(lr_prob*100)}%)\n"
-#         f"DT модель: {'⚠️ Phishing' if dt_model.predict(X)[0] == 1 else '✅ Ham'} ({int(dt_prob*100)}%)\n"
-#         f"LSTM модель: {'⚠️ Phishing' if lstm_model.predict(X)[0] == 1 else '✅ Ham'} ({int(lstm_prob*100)}%)\n"
-#     )
-    
-#     # Добавляем обнаруженные паттерны
-#     if detected_patterns:
-#         response += "\n🔍 Обнаружены подозрительные фразы:\n"
-#         for pattern, reason in detected_patterns.items():
-#             response += f"- {pattern}: {reason}\n"
-    
-#     await update.message.reply_text(response)
 async def check_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message.text.strip()
+    user_id = update.effective_user.id
+    username = update.effective_user.username
+    timestamp = datetime.now()
+    
+    # Подключаемся к базе данных
+    conn = create_connection()
+    add_user(conn, user_id, username)
 
-    text = update.message.text
-    predictions = model_manager.predict_all(text)
-    combined = model_manager.get_combined_prediction(text)
-    
-    response = "📊 Результаты анализа:\n"
-    for name, pred in predictions.items():
-        if pred['probability'] is not None:
-            response += f"{name}: {pred['probability']*100:.1f}% (вес: {pred['weight']})\n"
-    
+    # Прогоняем сообщение через модели
+    predictions = model_manager.predict_all(message)
+    combined = model_manager.get_combined_prediction(message)
+
+    # Сохраняем сообщение в БД
+    prediction_result = "Фишинг" if combined >= 0.85 else "Обычное письмо"
+    message_id = save_message(conn, user_id, message, prediction_result)
+
+    # Определяем уровень риска
     risk_score = min(100, max(0, int(combined * 100)))
-    risk_status = "🔴 Высокий риск" if risk_score > 70 else \
-                    "🟡 Средний риск" if risk_score > 30 else "🟢 Низкий риск"
+    risk_level = "🔴 Высокий риск" if risk_score >= 85 else ("🟡 Средний риск" if risk_score >= 40 else "🟢 Низкий риск")
+
+    # Формируем ответ пользователю
+    response = f"📌 Результат проверки: {prediction_result}\n\n"
+    response += f"🛡 Общий уровень риска: {risk_score}% ({risk_level})\n\n"
+    response += "Детали анализа:\n"
+    for name, pred in predictions.items():
+        prob = pred["probability"] or 0
+        weight = pred["weight"]
+        response += f'- {name}: {prob * 100:.1f}% (Вес: {weight})\n'
+
+    # Если вероятность высокая, отправляем уведомление администраторам
+    if combined >= 0.85:
+        admin_ids = fetch_admins(conn)
+        notification = f"🆘 Предупреждение!\nСообщение было распознано как фишинг.\nПользователь: {username}, ID: {user_id}.\nСообщение: {message}\nОтправлено: {timestamp.strftime('%Y-%m-%d %H:%M:%S')}."
+        for admin_id in admin_ids:
+            await context.bot.send_message(chat_id=admin_id, text=notification)
     
-    response += f"\n🛡️ Комбинированный риск: {risk_score}% ({risk_status})"
-    # Поиск подозрительных фраз в тексте
-    detected_patterns = {}
-    for pattern, reason in SUSPICIOUS_PATTERNS.items():
-        if pattern.lower() in text.lower():
-            detected_patterns[pattern] = reason
-    # Формирование ответа с подсветкой
-    marked_text = text
-    for pattern in detected_patterns:
-        marked_text = marked_text.replace(pattern, f"❗{pattern}❗")        
-    if detected_patterns:
-        response += "\n\n🔍 Обнаружены подозрительные фразы:\n"
-        for pattern, reason in detected_patterns.items():
-            response += f"- {pattern}: {reason}\n"
-        
-    response += f"\n📝 Текст с выделением:\n{marked_text}"
-        
-    await update.message.reply_text(response)
+    # Формируем инлайн-клавиатуру с кнопкой "report"
+    keyboard = [
+        [InlineKeyboardButton("👎 Report", callback_data=f'report_{message_id}')],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
-        
-  
-app = ApplicationBuilder().token(TOKEN).build()
+    # await update.message.reply_markdown_v2(response)
+    await update.message.reply_text(response, reply_markup=reply_markup)
 
-app.add_handler(CommandHandler("start", hello))
-app.add_handler(CommandHandler("get_info", role))
-app.add_handler(CommandHandler("set_role", set_role))
-app.add_handler(MessageHandler(None, check_email))
+    conn.close()
 
+async def report_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message_id = update.message.reply_to_message.message_id
+    reporter_id = update.effective_user.id
+    reason = "Пользователь выразил несогласие с результатом."
 
-app.run_polling()
+    conn = create_connection()
+    report_message(conn, message_id, reporter_id, reason)
+    await update.message.reply_text("Спасибо за ваш отзыв!")
+    conn.close()
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    # Парсим callback_data
+    action, message_id = query.data.split('_')
+
+    if action == 'report':
+        # Логика обработки жалобы
+        # Например, сохраним жалобу в базе данных
+        user_id = query.from_user.id
+        conn = create_connection()
+        report_message(conn, message_id, user_id, reason="Пользователь нажал кнопку 'report'")
+        conn.close()
+
+        # Уведомляем пользователя, что жалоба принята
+        await query.edit_message_reply_markup(reply_markup=None)
+        await query.message.reply_text("Жалоба зарегистрирована. Спасибо за ваше участие!")
+
+async def make_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if len(args) != 1:
+        await update.message.reply_text("Используйте команду /make_admin <ID пользователя>")
+        return
+    telegram_id = int(args[0])
+
+    conn = create_connection()
+    make_admin(conn, telegram_id)
+    await update.message.reply_text(f"Пользователь с ID {telegram_id} назначен администратором.")
+    conn.close()
+
+if __name__ == "__main__":
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    # Регистрация обработчиков команд
+    app.add_handler(CommandHandler("start", hello))
+    app.add_handler(CommandHandler("role", role))
+    app.add_handler(CommandHandler("report", report_message_command))
+    app.add_handler(CommandHandler("make_admin", make_admin_command))
+    app.add_handler(CallbackQueryHandler(button_callback))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, check_email))
+
+    print("Bot started.")
+    app.run_polling()
