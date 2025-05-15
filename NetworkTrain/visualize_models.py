@@ -29,6 +29,11 @@ with open("saved_models_LR/lr_C_1_max_iter_500_penalty_l2_solver_liblinear.pkl",
 with open("saved_models_LR/tfidf_vectorizer.pkl", "rb") as f:
     tfidf = pickle.load(f)
 
+with open("saved_models_MNB/mnb.pkl", "rb") as f:
+    mnb_model = pickle.load(f)
+with open("saved_models_MNB/vectorizer.pkl", "rb") as f:
+    vectorizer = pickle.load(f)
+
 # Decision Tree
 with open("saved_models_DT/dt_class_weight_None_criterion_gini_max_depth_10_min_samples_leaf_2_min_samples_split_2.pkl", "rb") as f:
     tree_model = pickle.load(f)
@@ -51,19 +56,23 @@ X_test_cleaned = X_test.apply(preprocessor.clean_text)
 X_test_seq = tokenizer.texts_to_sequences(X_test_cleaned)
 X_test_pad = pad_sequences(X_test_seq, maxlen=200, padding="post")
 
+
 # Для Logistic Regression и Decision Tree
 X_test_tfidf = tfidf.transform(X_test_cleaned)
+X_test_vec = vectorizer.transform(X_test_cleaned)
 
 # --- 5. Предсказания ---
 y_pred_lstm = (lstm_model.predict(X_test_pad) > 0.5).astype(int).flatten()
 y_pred_logistic = logistic_model.predict(X_test_tfidf)
 y_pred_tree = tree_model.predict(X_test_tfidf)
-
+y_pred_mnb = mnb_model.predict(X_test_vec) 
+print(y_pred_mnb)
 # --- 6. Вычисление метрик ---
 models = {
     "LSTM": y_pred_lstm,
     "Logistic Regression": y_pred_logistic,
-    "Decision Tree": y_pred_tree
+    "Decision Tree": y_pred_tree,
+    "MNB": y_pred_mnb
 }
 
 metrics = {}

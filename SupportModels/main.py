@@ -48,7 +48,7 @@ def extract_phishing_patterns(file_path, top_n=20):
     return top_terms
 
 # Пример использования
-file_path = "../NetworkTrain/DATASETS/Phishing_Email.csv"  # Укажи путь к файлу
+file_path = "../NetworkTrain/DATASETS/Phishing_Email.csv" 
 phishing_patterns = extract_phishing_patterns(file_path)
 print("Top phishing patterns:")
 for pattern in phishing_patterns:

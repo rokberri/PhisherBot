@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, filters, CallbackContext, MessageHandler
 from User import User 
-from config import TOKEN
+from config import TOKEN, SUSPICIOUS_PATTERNS
 import pickle
 from utils import load_model
 from text_processor import TextPreprocessor
@@ -114,7 +114,22 @@ async def check_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "🟡 Средний риск" if risk_score > 30 else "🟢 Низкий риск"
     
     response += f"\n🛡️ Комбинированный риск: {risk_score}% ({risk_status})"
-    
+    # Поиск подозрительных фраз в тексте
+    detected_patterns = {}
+    for pattern, reason in SUSPICIOUS_PATTERNS.items():
+        if pattern.lower() in text.lower():
+            detected_patterns[pattern] = reason
+    # Формирование ответа с подсветкой
+    marked_text = text
+    for pattern in detected_patterns:
+        marked_text = marked_text.replace(pattern, f"❗{pattern}❗")        
+    if detected_patterns:
+        response += "\n\n🔍 Обнаружены подозрительные фразы:\n"
+        for pattern, reason in detected_patterns.items():
+            response += f"- {pattern}: {reason}\n"
+        
+    response += f"\n📝 Текст с выделением:\n{marked_text}"
+        
     await update.message.reply_text(response)
     
         

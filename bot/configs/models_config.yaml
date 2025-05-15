@@ -3,7 +3,7 @@ models:
     - name: "lr_model"
       type: "sklearn"
       path: "models/lr"
-      weight: 0.45
+      weight: 0.15
       enabled: true
     - name: "lstm_model"
       type: "keras"
@@ -14,6 +14,11 @@ models:
       type: "sklearn"
       path: "models/dt"
       weight: 0.15
+      enabled: true 
+    - name: "mnb_model"
+      type: "sklearn"
+      path: "models/mnb"
+      weight: 0.3
       enabled: true 
   plugins:
     - name: "external_model"

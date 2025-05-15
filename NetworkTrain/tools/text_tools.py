@@ -2,11 +2,8 @@ import nltk
 import string
 import re
 from nltk.corpus import stopwords
-from sklearn.feature_extraction.text import TfidfVectorizer
-
 from bs4 import BeautifulSoup
-from nltk.stem import PorterStemmer, WordNetLemmatizer
-from sklearn.preprocessing import LabelEncoder
+from nltk.stem import PorterStemmer
 
 # Download NLTK resources
 nltk.download('stopwords')

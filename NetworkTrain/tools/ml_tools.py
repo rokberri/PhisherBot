@@ -1,5 +1,7 @@
 import pickle
 import os
+from sklearn.preprocessing import LabelEncoder
+
 
 #-----------------ML TOOLS-----------------#
 def save_model(model, filename):
@@ -40,3 +42,24 @@ def load_model(path):
 #-------------------------------------------#
 
 
+class LabelTransformer:
+    def __init__(self, column_name="Email Type"):
+        self.column_name = column_name
+        self.label_encoder = LabelEncoder()
+
+    def fit_transform(self, df):
+        return self.label_encoder.fit_transform(df[self.column_name])
+
+    def transform(self, labels):
+        return self.label_encoder.transform(labels)
+
+    def inverse_transform(self, labels):
+        return self.label_encoder.inverse_transform(labels)
+    
+    def save(self, filepath):
+        with open(filepath, 'wb') as f:
+            pickle.dump(self.label_encoder, f)
+
+    def load(self, filepath):
+        with open(filepath, 'rb') as f:
+            self.label_encoder = pickle.load(f)
