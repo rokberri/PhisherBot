@@ -24,7 +24,6 @@ def evaluate_model(model, vectorizer, X_texts, y_true, title_prefix="Model", sav
         X_seq = vectorizer.texts_to_sequences(X_texts)
         X_vec = pad_sequences(X_seq, maxlen=MAX_SEQUENCE_LENGTH)
     elif hasattr(vectorizer, 'transform'):
-        # Для классических векторизаторов вроде CountVectorizer, TfidfVectorizer
         X_vec = vectorizer.transform(X_texts)
     else:
         raise ValueError("Unsupported vectorizer type!")

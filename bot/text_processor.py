@@ -1,4 +1,3 @@
-# common/text_preprocessor.py
 import re
 import string
 from bs4 import BeautifulSoup
